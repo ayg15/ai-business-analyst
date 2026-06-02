@@ -1,11 +1,13 @@
+import logging
 import re
-from pathlib import Path
-
 import duckdb
 import pandas as pd
+from pathlib import Path
 
+logger = logging.getLogger(__name__)
 
 db = duckdb.connect(database=":memory:")
+logger.info("Connected to in-memory DuckDB database")
 
 
 def table_name_from_filename(filename: str) -> str:
@@ -14,11 +16,23 @@ def table_name_from_filename(filename: str) -> str:
     return name or "uploaded_data"
 
 
-def upload_csv(file, filename: str) -> dict:
-    df = pd.read_csv(file)
-    table_name = table_name_from_filename(filename)
+def upload_and_save_csv(file, filename: str) -> dict:
+    logger.info("Uploading CSV file: %s", filename)
 
-    db.register(table_name, df)
+    try:
+        df = pd.read_csv(file)
+        table_name = table_name_from_filename(filename)
+        db.register(table_name, df)
+    except Exception:
+        logger.exception("Failed to upload CSV file: %s", filename)
+        raise
+
+    logger.info(
+        "Registered table '%s' with %s rows and %s columns",
+        table_name,
+        len(df),
+        len(df.columns),
+    )
 
     return {
         "message": f"{table_name} uploaded successfully",
@@ -28,20 +42,42 @@ def upload_csv(file, filename: str) -> dict:
 
 
 def list_tables() -> list[str]:
-    return [table[0] for table in db.sql("SHOW TABLES").fetchall()]
+    try:
+        tables = [table[0] for table in db.sql("SHOW TABLES").fetchall()]
+    except Exception:
+        logger.exception("Failed to list DuckDB tables")
+        raise
+
+    logger.info("Found %s table(s)", len(tables))
+    return tables
 
 
 def describe_tables() -> str:
     schema_info = ""
 
-    for table_name in list_tables():
-        columns = db.sql(f"DESCRIBE {table_name}").df()
-        schema_info += f"\nTable: {table_name}\n"
-        schema_info += columns.to_string()
-        schema_info += "\n"
+    try:
+        for table_name in list_tables():
+            columns = db.sql(f"DESCRIBE {table_name}").df()
+            schema_info += f"\nTable: {table_name}\n"
+            schema_info += columns.to_string()
+            schema_info += "\n"
+    except Exception:
+        logger.exception("Failed to describe DuckDB tables")
+        raise
+
+    logger.info("Generated schema description")
 
     return schema_info
 
 
 def run_query(sql_query: str) -> pd.DataFrame:
-    return db.sql(sql_query).df()
+    logger.info("Running SQL query")
+
+    try:
+        result_df = db.sql(sql_query).df()
+    except Exception:
+        logger.exception("Failed to run SQL query")
+        raise
+
+    logger.info("Query returned %s row(s)", len(result_df))
+    return result_df
