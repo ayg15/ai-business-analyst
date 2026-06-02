@@ -43,11 +43,9 @@ if st.button("Analyze") and question:
     response.raise_for_status()
 
     data = response.json()
-
     st.code(data["sql"])
 
     df = pd.DataFrame(data["data"])
-
     st.dataframe(df)
 
     if len(df.columns) > 1:

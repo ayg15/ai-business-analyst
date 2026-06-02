@@ -89,25 +89,15 @@ Question:
         raw_sql = ask_llm(prompt)
 
         logger.info("Raw LLM output: %s", raw_sql)
-        # -----------------------------
         sql_query = extract_sql(raw_sql)
 
         logger.info("Clean SQL: %s", sql_query)
 
-        # -----------------------------
-        # STEP 4: VALIDATE SQL
-        # -----------------------------
+        # Basic validation to ensure we have a SELECT query before running it
         if not sql_query.lower().strip().startswith("select"):
             raise ValueError(f"Invalid SQL generated: {sql_query}")
-
-        # -----------------------------
-        # STEP 5: EXECUTE SQL
-        # -----------------------------
         result_df = run_query(sql_query)
-
-        # -----------------------------
-        # STEP 6: RETURN RESPONSE
-        # -----------------------------
+        
         return {
             "question": question,
             "sql": sql_query,
