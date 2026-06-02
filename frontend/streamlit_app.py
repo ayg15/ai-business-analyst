@@ -2,6 +2,7 @@ import streamlit as st
 import requests
 import pandas as pd
 import hashlib
+import altair as alt
 
 st.title("AI Business Analyst Assistant")
 
@@ -36,19 +37,33 @@ if uploaded_files:
 question = st.text_input("Ask a business question")
 
 if st.button("Analyze") and question:
-
     response = requests.get(
         "http://localhost:8000/ask", params={"question": question}, timeout=180
     )
     response.raise_for_status()
 
     data = response.json()
-
     st.code(data["sql"])
 
     df = pd.DataFrame(data["data"])
+    st.dataframe(df, width='stretch')
 
-    st.dataframe(df)
+    if not df.empty:
+        numeric_columns = df.select_dtypes(include="number").columns.tolist()
 
-    if len(df.columns) > 1:
-        st.bar_chart(df.iloc[:, 1])
+        if len(numeric_columns) == 1 and len(df.columns) > 1:
+            count_col = numeric_columns[0]
+            label_col = [c for c in df.columns if c != count_col][0]
+            chart = alt.Chart(df).mark_bar().encode(
+                x=alt.X(f"{label_col}:N", title=label_col),
+                y=alt.Y(f"{count_col}:Q", title=count_col),
+                tooltip=[label_col, count_col],
+            ).properties(
+                width=700,
+                height=400,
+                title=f"{count_col} by {label_col}",
+            )
+            st.altair_chart(chart, use_container_width=True)
+        elif len(numeric_columns) >= 1:
+            numeric_df = df[numeric_columns]
+            st.bar_chart(numeric_df)

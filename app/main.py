@@ -1,21 +1,25 @@
-from fastapi import FastAPI, UploadFile, HTTPException
 import re
-
-from app.database import describe_tables, list_tables, run_query, upload_csv as save_csv
+import logging
+from fastapi import FastAPI, UploadFile, HTTPException
+from app.database import (
+    describe_tables, 
+    list_tables, 
+    run_query, 
+    upload_and_save_csv
+)
 from app.llm import ask_llm
+
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 app = FastAPI()
 
 
-# -----------------------------
-# HELPER: CLEAN SQL OUTPUT
-# -----------------------------
 def extract_sql(text: str) -> str:
     """
     Extract only SQL starting from SELECT.
-    Removes explanations, markdown, etc.
+    Removes explanations, markdown, and normalizes SQL for DuckDB.
     """
-
     if not text:
         return ""
 
@@ -26,55 +30,42 @@ def extract_sql(text: str) -> str:
     match = re.search(r"(SELECT[\s\S]*)", text, re.IGNORECASE)
 
     if match:
-        return match.group(1).strip()
+        text = match.group(1)
+
+    # DuckDB does not use MySQL-style backticks for quoted identifiers.
+    # Convert `column_name` to "column_name" before execution.
+    text = re.sub(r"`([^`]+)`", r'"\1"', text)
 
     return text.strip()
 
 
-# -----------------------------
-# UPLOAD CSV
-# -----------------------------
 @app.post("/upload")
 async def upload_csv(file: UploadFile):
-
     try:
-        return save_csv(file.file, file.filename)
-
+        return upload_and_save_csv(file.file, file.filename)
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
 
-# -----------------------------
-# LIST TABLES
-# -----------------------------
 @app.get("/tables")
 async def get_tables():
-
     try:
         return {"tables": list_tables()}
-
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
 
-# -----------------------------
-# ASK QUESTION (LLM → SQL → EXECUTE)
-# -----------------------------
 @app.get("/ask")
 async def ask(question: str):
 
     try:
-        # -----------------------------
-        # STEP 1: GET SCHEMA
-        # -----------------------------
+        # get current database schema to provide context to LLM
         schema_info = describe_tables()
 
         if not schema_info:
             raise ValueError("Upload at least one CSV before asking a question.")
 
-        # -----------------------------
-        # STEP 2: PROMPT LLM
-        # -----------------------------
+        # prompt for LLM to generate SQL based on question and current database schema
         prompt = f"""
 You are a senior data engineer.
 
@@ -82,7 +73,9 @@ IMPORTANT RULES:
 - Output ONLY SQL
 - No explanations
 - No markdown
-- No backticks
+- Generate DuckDB SQL
+- Do not use MySQL backticks
+- Use double quotes for identifiers only when needed
 - Must start with SELECT
 - Use only these tables
 
@@ -95,29 +88,16 @@ Question:
 
         raw_sql = ask_llm(prompt)
 
-        print("\nRAW LLM OUTPUT:\n", raw_sql)
-
-        # -----------------------------
-        # STEP 3: CLEAN SQL
-        # -----------------------------
+        logger.info("Raw LLM output: %s", raw_sql)
         sql_query = extract_sql(raw_sql)
 
-        print("\nCLEAN SQL:\n", sql_query)
+        logger.info("Clean SQL: %s", sql_query)
 
-        # -----------------------------
-        # STEP 4: VALIDATE SQL
-        # -----------------------------
+        # Basic validation to ensure we have a SELECT query before running it
         if not sql_query.lower().strip().startswith("select"):
             raise ValueError(f"Invalid SQL generated: {sql_query}")
-
-        # -----------------------------
-        # STEP 5: EXECUTE SQL
-        # -----------------------------
         result_df = run_query(sql_query)
-
-        # -----------------------------
-        # STEP 6: RETURN RESPONSE
-        # -----------------------------
+        
         return {
             "question": question,
             "sql": sql_query,
@@ -126,5 +106,5 @@ Question:
         }
 
     except Exception as e:
-        print("ERROR:", str(e))
+        logger.exception("Error while answering question")
         raise HTTPException(status_code=500, detail=str(e))
