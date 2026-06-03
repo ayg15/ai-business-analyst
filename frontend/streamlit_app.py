@@ -1,9 +1,10 @@
+import hashlib
 import os
+
+import altair as alt
+import pandas as pd
 import streamlit as st
 import requests
-import pandas as pd
-import hashlib
-import altair as alt
 
 BACKEND_URL = os.getenv("BACKEND_URL", "http://localhost:8000")
 
@@ -17,8 +18,8 @@ uploaded_files = st.file_uploader(
     "Upload CSV Files", type=["csv"], accept_multiple_files=True
 )
 
-if uploaded_files:
 
+if uploaded_files:
     for uploaded_file in uploaded_files:
         file_bytes = uploaded_file.getvalue()
         file_key = hashlib.sha256(
@@ -44,38 +45,50 @@ if uploaded_files:
 
 question = st.text_input("Ask a business question")
 
-if st.button("Analyze") and question:
+
+def error_detail(response: requests.Response) -> str:
+    try:
+        return response.json().get("detail", response.text)
+    except ValueError:
+        return response.text
+
+
+def show_chart(df: pd.DataFrame) -> None:
+    numeric_columns = df.select_dtypes(include="number").columns.tolist()
+
+    if len(numeric_columns) == 1 and len(df.columns) > 1:
+        count_col = numeric_columns[0]
+        label_col = next(column for column in df.columns if column != count_col)
+        chart = alt.Chart(df).mark_bar().encode(
+            x=alt.X(f"{label_col}:N", title=label_col),
+            y=alt.Y(f"{count_col}:Q", title=count_col),
+            tooltip=[label_col, count_col],
+        ).properties(
+            width=700,
+            height=400,
+            title=f"{count_col} by {label_col}",
+        )
+        st.altair_chart(chart, use_container_width=True)
+    elif numeric_columns:
+        st.bar_chart(df[numeric_columns])
+
+
+if st.button("Analyze", disabled=not question):
     try:
         response = requests.get(
             f"{BACKEND_URL}/ask", params={"question": question}, timeout=240
         )
         response.raise_for_status()
     except requests.RequestException as exc:
-        st.error(f"Analysis failed: {exc}")
+        detail = error_detail(exc.response) if exc.response is not None else str(exc)
+        st.error(f"Analysis failed: {detail}")
         st.stop()
 
     data = response.json()
     st.code(data["sql"])
 
     df = pd.DataFrame(data["data"])
-    st.dataframe(df, width='stretch')
+    st.dataframe(df, width="stretch")
 
     if not df.empty:
-        numeric_columns = df.select_dtypes(include="number").columns.tolist()
-
-        if len(numeric_columns) == 1 and len(df.columns) > 1:
-            count_col = numeric_columns[0]
-            label_col = [c for c in df.columns if c != count_col][0]
-            chart = alt.Chart(df).mark_bar().encode(
-                x=alt.X(f"{label_col}:N", title=label_col),
-                y=alt.Y(f"{count_col}:Q", title=count_col),
-                tooltip=[label_col, count_col],
-            ).properties(
-                width=700,
-                height=400,
-                title=f"{count_col} by {label_col}",
-            )
-            st.altair_chart(chart, use_container_width=True)
-        elif len(numeric_columns) >= 1:
-            numeric_df = df[numeric_columns]
-            st.bar_chart(numeric_df)
+        show_chart(df)
