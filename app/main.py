@@ -1,18 +1,25 @@
-import re
 import logging
+import re
+
 from fastapi import FastAPI, UploadFile, HTTPException
+
 from app.database import (
-    describe_tables, 
-    list_tables, 
-    run_query, 
-    upload_and_save_csv
+    describe_tables,
+    list_tables,
+    run_query,
+    upload_and_save_csv,
 )
-from app.llm import ask_llm
+from app.llm import OllamaError, ask_llm
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 app = FastAPI()
+
+
+@app.get("/health")
+async def health():
+    return {"status": "ok"}
 
 
 def extract_sql(text: str) -> str:
@@ -26,8 +33,8 @@ def extract_sql(text: str) -> str:
     # Remove code blocks
     text = text.replace("```sql", "").replace("```", "")
 
-    # Extract SELECT query
-    match = re.search(r"(SELECT[\s\S]*)", text, re.IGNORECASE)
+    # Extract the first SELECT statement and discard explanations after it.
+    match = re.search(r"(SELECT[\s\S]*?)(?:;|$)", text, re.IGNORECASE)
 
     if match:
         text = match.group(1)
@@ -44,6 +51,7 @@ async def upload_csv(file: UploadFile):
     try:
         return upload_and_save_csv(file.file, file.filename)
     except Exception as e:
+        logger.exception("CSV upload failed")
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -52,18 +60,21 @@ async def get_tables():
     try:
         return {"tables": list_tables()}
     except Exception as e:
+        logger.exception("Could not list tables")
         raise HTTPException(status_code=500, detail=str(e))
 
 
 @app.get("/ask")
 async def ask(question: str):
-
     try:
         # get current database schema to provide context to LLM
         schema_info = describe_tables()
 
         if not schema_info:
-            raise ValueError("Upload at least one CSV before asking a question.")
+            raise HTTPException(
+                status_code=400,
+                detail="Upload at least one CSV before asking a question.",
+            )
 
         # prompt for LLM to generate SQL based on question and current database schema
         prompt = f"""
@@ -102,9 +113,13 @@ Question:
             "question": question,
             "sql": sql_query,
             "rows": len(result_df),
-            "data": result_df.to_dict(orient="records")
+            "data": result_df.to_dict(orient="records"),
         }
 
+    except HTTPException:
+        raise
+    except OllamaError as e:
+        raise HTTPException(status_code=503, detail=str(e))
     except Exception as e:
         logger.exception("Error while answering question")
         raise HTTPException(status_code=500, detail=str(e))
