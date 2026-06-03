@@ -13,6 +13,7 @@ services:
       interval: 10s
       timeout: 5s
       retries: 10
+      start_period: 10s
 
   ollama-pull:
     image: ollama/ollama:latest
@@ -23,6 +24,7 @@ services:
     depends_on:
       ollama:
         condition: service_healthy
+    restart: "no"
 
   backend:
     build:
@@ -41,6 +43,14 @@ services:
     depends_on:
       ollama:
         condition: service_healthy
+      ollama-pull:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health', timeout=5)"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
 
   frontend:
     build:
@@ -53,7 +63,8 @@ services:
     ports:
       - "8501:8501"
     depends_on:
-      - backend
+      backend:
+        condition: service_healthy
 
 volumes:
   ollama-data:

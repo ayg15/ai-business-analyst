@@ -1,9 +1,10 @@
 import logging
 import os
 import re
+from pathlib import Path
+
 import duckdb
 import pandas as pd
-from pathlib import Path
 
 logger = logging.getLogger(__name__)
 
@@ -26,20 +27,21 @@ def quote_identifier(identifier: str) -> str:
 
 def upload_and_save_csv(file, filename: str) -> dict:
     logger.info("Uploading CSV file: %s", filename)
+    df = pd.read_csv(file)
+    table_name = table_name_from_filename(filename)
+    temp_view = f"tmp_{table_name}"
+    registered = False
 
     try:
-        df = pd.read_csv(file)
-        table_name = table_name_from_filename(filename)
-        temp_view = f"tmp_{table_name}"
         db.register(temp_view, df)
+        registered = True
         db.sql(
             f"CREATE OR REPLACE TABLE {quote_identifier(table_name)} AS "
             f"SELECT * FROM {quote_identifier(temp_view)}"
         )
-        db.unregister(temp_view)
-    except Exception:
-        logger.exception("Failed to upload CSV file: %s", filename)
-        raise
+    finally:
+        if registered:
+            db.unregister(temp_view)
 
     logger.info(
         "Registered table '%s' with %s rows and %s columns",
@@ -56,42 +58,21 @@ def upload_and_save_csv(file, filename: str) -> dict:
 
 
 def list_tables() -> list[str]:
-    try:
-        tables = [table[0] for table in db.sql("SHOW TABLES").fetchall()]
-    except Exception:
-        logger.exception("Failed to list DuckDB tables")
-        raise
-
+    tables = [table[0] for table in db.sql("SHOW TABLES").fetchall()]
     logger.info("Found %s table(s)", len(tables))
     return tables
 
 
 def describe_tables() -> str:
-    schema_info = ""
-
-    try:
-        for table_name in list_tables():
-            columns = db.sql(f"DESCRIBE {quote_identifier(table_name)}").df()
-            schema_info += f"\nTable: {table_name}\n"
-            schema_info += columns.to_string()
-            schema_info += "\n"
-    except Exception:
-        logger.exception("Failed to describe DuckDB tables")
-        raise
-
-    logger.info("Generated schema description")
-
-    return schema_info
+    descriptions = []
+    for table_name in list_tables():
+        columns = db.sql(f"DESCRIBE {quote_identifier(table_name)}").df()
+        descriptions.append(f"Table: {table_name}\n{columns.to_string()}")
+    return "\n\n".join(descriptions)
 
 
 def run_query(sql_query: str) -> pd.DataFrame:
     logger.info("Running SQL query")
-
-    try:
-        result_df = db.sql(sql_query).df()
-    except Exception:
-        logger.exception("Failed to run SQL query")
-        raise
-
+    result_df = db.sql(sql_query).df()
     logger.info("Query returned %s row(s)", len(result_df))
     return result_df

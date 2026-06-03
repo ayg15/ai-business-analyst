@@ -9,6 +9,10 @@ OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434").rstrip(
 OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "llama3.1")
 
 
+class OllamaError(RuntimeError):
+    pass
+
+
 def ask_llm(prompt: str) -> str:
     logger.info("Sending prompt to Ollama model: %s", OLLAMA_MODEL)
 
@@ -23,9 +27,13 @@ def ask_llm(prompt: str) -> str:
             timeout=180,
         )
         response.raise_for_status()
-    except requests.RequestException:
-        logger.exception("Failed to get response from Ollama")
-        raise
+    except requests.RequestException as exc:
+        detail = response.text if "response" in locals() else str(exc)
+        logger.exception("Failed to get response from Ollama: %s", detail)
+        raise OllamaError(f"Ollama failed for model '{OLLAMA_MODEL}': {detail}") from exc
 
     logger.info("Received response from Ollama")
-    return response.json()["response"]
+    data = response.json()
+    if "response" not in data:
+        raise OllamaError(f"Ollama returned an unexpected response: {data}")
+    return data["response"]
