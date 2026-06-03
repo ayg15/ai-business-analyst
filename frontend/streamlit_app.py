@@ -1,10 +1,14 @@
+import os
 import streamlit as st
 import requests
 import pandas as pd
 import hashlib
 import altair as alt
 
+BACKEND_URL = os.getenv("BACKEND_URL", "http://localhost:8000")
+
 st.title("AI Business Analyst Assistant")
+st.caption(f"Backend: {BACKEND_URL}")
 
 if "uploaded_file_keys" not in st.session_state:
     st.session_state.uploaded_file_keys = set()
@@ -24,12 +28,16 @@ if uploaded_files:
         if file_key in st.session_state.uploaded_file_keys:
             continue
 
-        response = requests.post(
-            "http://localhost:8000/upload",
-            files={"file": (uploaded_file.name, file_bytes, "text/csv")},
-            timeout=60,
-        )
-        response.raise_for_status()
+        try:
+            response = requests.post(
+                f"{BACKEND_URL}/upload",
+                files={"file": (uploaded_file.name, file_bytes, "text/csv")},
+                timeout=60,
+            )
+            response.raise_for_status()
+        except requests.RequestException as exc:
+            st.error(f"Upload failed: {exc}")
+            st.stop()
 
         st.success(response.json()["message"])
         st.session_state.uploaded_file_keys.add(file_key)
@@ -37,10 +45,14 @@ if uploaded_files:
 question = st.text_input("Ask a business question")
 
 if st.button("Analyze") and question:
-    response = requests.get(
-        "http://localhost:8000/ask", params={"question": question}, timeout=180
-    )
-    response.raise_for_status()
+    try:
+        response = requests.get(
+            f"{BACKEND_URL}/ask", params={"question": question}, timeout=240
+        )
+        response.raise_for_status()
+    except requests.RequestException as exc:
+        st.error(f"Analysis failed: {exc}")
+        st.stop()
 
     data = response.json()
     st.code(data["sql"])

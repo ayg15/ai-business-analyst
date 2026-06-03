@@ -15,6 +15,11 @@ logger = logging.getLogger(__name__)
 app = FastAPI()
 
 
+@app.get("/health")
+async def health():
+    return {"status": "ok"}
+
+
 def extract_sql(text: str) -> str:
     """
     Extract only SQL starting from SELECT.

@@ -1,4 +1,5 @@
 import logging
+import os
 import re
 import duckdb
 import pandas as pd
@@ -6,8 +7,11 @@ from pathlib import Path
 
 logger = logging.getLogger(__name__)
 
-db = duckdb.connect(database=":memory:")
-logger.info("Connected to in-memory DuckDB database")
+DATABASE_PATH = os.getenv("DATABASE_PATH", "/app/data/business_analyst.duckdb")
+Path(DATABASE_PATH).parent.mkdir(parents=True, exist_ok=True)
+
+db = duckdb.connect(database=DATABASE_PATH)
+logger.info("Connected to DuckDB database: %s", DATABASE_PATH)
 
 
 def table_name_from_filename(filename: str) -> str:
@@ -16,13 +20,23 @@ def table_name_from_filename(filename: str) -> str:
     return name or "uploaded_data"
 
 
+def quote_identifier(identifier: str) -> str:
+    return '"' + identifier.replace('"', '""') + '"'
+
+
 def upload_and_save_csv(file, filename: str) -> dict:
     logger.info("Uploading CSV file: %s", filename)
 
     try:
         df = pd.read_csv(file)
         table_name = table_name_from_filename(filename)
-        db.register(table_name, df)
+        temp_view = f"tmp_{table_name}"
+        db.register(temp_view, df)
+        db.sql(
+            f"CREATE OR REPLACE TABLE {quote_identifier(table_name)} AS "
+            f"SELECT * FROM {quote_identifier(temp_view)}"
+        )
+        db.unregister(temp_view)
     except Exception:
         logger.exception("Failed to upload CSV file: %s", filename)
         raise
@@ -57,7 +71,7 @@ def describe_tables() -> str:
 
     try:
         for table_name in list_tables():
-            columns = db.sql(f"DESCRIBE {table_name}").df()
+            columns = db.sql(f"DESCRIBE {quote_identifier(table_name)}").df()
             schema_info += f"\nTable: {table_name}\n"
             schema_info += columns.to_string()
             schema_info += "\n"
