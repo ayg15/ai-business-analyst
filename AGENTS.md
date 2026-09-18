@@ -8,7 +8,7 @@ This is an AI business analytics assistant with:
 - FastAPI backend in `app/`
 - Streamlit frontend in `frontend/`
 - DuckDB persistence
-- Ollama-backed natural-language-to-SQL generation
+- Provider-configurable natural-language-to-SQL generation
 - A bundled Online Retail workbook at `data/online_retail/Online Retail.xlsx`
 
 The backend loads the Online Retail workbook at startup when available and creates these query surfaces:
@@ -21,9 +21,10 @@ The backend loads the Online Retail workbook at startup when available and creat
 
 - `app/database.py` handles file ingestion, DuckDB access, and Online Retail views.
 - `app/main.py` defines FastAPI endpoints and question handling.
-- `app/llm.py` calls Ollama.
+- `app/llm.py` calls the configured LLM provider.
 - `frontend/streamlit_app.py` provides the user interface.
 - `docker-compose.yml` runs Ollama, backend, and frontend together.
+- `.env` stores Docker Compose runtime configuration and provider settings.
 - `README.md` contains user-facing setup and run instructions.
 - `requirements.txt` contains Python dependencies.
 
@@ -45,6 +46,7 @@ Local backend on Windows PowerShell:
 
 ```powershell
 .\env\Scripts\Activate.ps1
+$env:LLM_PROVIDER="ollama"
 $env:OLLAMA_BASE_URL="http://localhost:11434"
 $env:OLLAMA_MODEL="llama3.1"
 uvicorn app.main:app --reload
@@ -66,6 +68,7 @@ Quick syntax check:
 ## Data and Runtime Notes
 
 - Do not require users to upload `Online Retail.xlsx`; the backend should load it automatically.
+- Docker Compose reads runtime settings from `.env`.
 - In Docker, `ONLINE_RETAIL_PATH` points to `/app/data/online_retail/Online Retail.xlsx`.
 - In Docker, `DATABASE_PATH` should point outside `/app/data`, currently `/app/runtime/business_analyst.duckdb`, so the runtime volume does not hide the bundled workbook.
 - Local DuckDB files such as `data/business_analyst.duckdb` are runtime artifacts and should not be committed.
@@ -82,8 +85,12 @@ Quick syntax check:
 
 ## LLM and Query Behavior
 
-- Ollama is configured through `OLLAMA_BASE_URL`, `OLLAMA_MODEL`, and `OLLAMA_TIMEOUT_SECONDS`.
-- Docker Compose uses `http://ollama:11434`; local runs usually use `http://localhost:11434`.
+- `LLM_PROVIDER` controls the backend. Supported values are `ollama`, `groq`, `openai`, and `openai_compatible`.
+- Prefer changing `.env` for Docker provider settings instead of hard-coding values in Python.
+- Ollama is configured through `OLLAMA_BASE_URL` and `OLLAMA_MODEL`.
+- Hosted/OpenAI-compatible providers use `LLM_API_KEY`, provider-specific keys such as `GROQ_API_KEY` or `OPENAI_API_KEY`, `LLM_MODEL`, and optionally `OPENAI_COMPATIBLE_BASE_URL`.
+- `LLM_TIMEOUT_SECONDS` controls the model request timeout.
+- Docker Compose defaults to `LLM_PROVIDER=ollama` and uses `http://ollama:11434`; local Ollama runs usually use `http://localhost:11434`.
 - Some common Online Retail questions use predefined SQL so the app can respond without waiting for Ollama.
 - Generated SQL is only lightly validated today. If improving safety, enforce single-statement read-only `SELECT` behavior before execution.
 
@@ -109,4 +116,3 @@ For the starter business question, `/ask` should answer quickly without Ollama:
 ```text
 Which countries generated the most revenue?
 ```
-

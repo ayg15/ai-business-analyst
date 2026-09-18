@@ -11,7 +11,7 @@ from app.database import (
     run_query,
     upload_and_save_file,
 )
-from app.llm import OllamaError, ask_llm
+from app.llm import LLMError, ask_llm
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -187,7 +187,7 @@ Question:
 
     except HTTPException:
         raise
-    except OllamaError as e:
+    except LLMError as e:
         raise HTTPException(status_code=503, detail=str(e))
     except Exception as e:
         logger.exception("Error while answering question")
