@@ -15,7 +15,7 @@ if "uploaded_file_keys" not in st.session_state:
     st.session_state.uploaded_file_keys = set()
 
 uploaded_files = st.file_uploader(
-    "Upload CSV Files", type=["csv"], accept_multiple_files=True
+    "Upload CSV or Excel files", type=["csv", "xlsx", "xls"], accept_multiple_files=True
 )
 
 
@@ -40,8 +40,19 @@ if uploaded_files:
             st.error(f"Upload failed: {exc}")
             st.stop()
 
-        st.success(response.json()["message"])
+        upload_result = response.json()
+        st.success(upload_result["message"])
         st.session_state.uploaded_file_keys.add(file_key)
+
+try:
+    tables_response = requests.get(f"{BACKEND_URL}/tables", timeout=10)
+    tables_response.raise_for_status()
+    tables = tables_response.json()["tables"]
+except requests.RequestException:
+    tables = []
+
+if tables:
+    st.caption("Available tables and views: " + ", ".join(tables))
 
 question = st.text_input("Ask a business question")
 

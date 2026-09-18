@@ -34,8 +34,10 @@ services:
     container_name: ai-business-analyst-backend
     environment:
       DATABASE_PATH: /app/data/business_analyst.duckdb
+      ONLINE_RETAIL_PATH: /app/data/online_retail/Online Retail.xlsx
       OLLAMA_BASE_URL: http://ollama:11434
       OLLAMA_MODEL: llama3.1
+      OLLAMA_TIMEOUT_SECONDS: 300
     ports:
       - "8000:8000"
     volumes:

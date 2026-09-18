@@ -7,6 +7,7 @@ logger = logging.getLogger(__name__)
 
 OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434").rstrip("/")
 OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "llama3.1")
+OLLAMA_TIMEOUT_SECONDS = int(os.getenv("OLLAMA_TIMEOUT_SECONDS", "300"))
 
 
 class OllamaError(RuntimeError):
@@ -23,8 +24,12 @@ def ask_llm(prompt: str) -> str:
                 "model": OLLAMA_MODEL,
                 "prompt": prompt,
                 "stream": False,
+                "options": {
+                    "temperature": 0,
+                    "num_predict": 256,
+                },
             },
-            timeout=180,
+            timeout=OLLAMA_TIMEOUT_SECONDS,
         )
         response.raise_for_status()
     except requests.RequestException as exc:
