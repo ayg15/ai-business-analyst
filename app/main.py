@@ -1,3 +1,4 @@
+import json
 import logging
 import re
 
@@ -5,9 +6,10 @@ from fastapi import FastAPI, UploadFile, HTTPException
 
 from app.database import (
     describe_tables,
+    load_default_online_retail_dataset,
     list_tables,
     run_query,
-    upload_and_save_csv,
+    upload_and_save_file,
 )
 from app.llm import OllamaError, ask_llm
 
@@ -15,6 +17,11 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 app = FastAPI()
+
+
+@app.on_event("startup")
+async def startup() -> None:
+    load_default_online_retail_dataset()
 
 
 @app.get("/health")
@@ -46,12 +53,69 @@ def extract_sql(text: str) -> str:
     return text.strip()
 
 
+def predefined_sql_for_question(question: str) -> str | None:
+    normalized = re.sub(r"\s+", " ", question.lower()).strip()
+
+    if (
+        "countr" in normalized
+        and "revenue" in normalized
+        and any(word in normalized for word in ["most", "highest", "top", "generated"])
+    ):
+        return """
+SELECT
+    country,
+    ROUND(SUM(line_revenue), 2) AS revenue
+FROM online_retail_sales_lines
+WHERE NOT is_return
+GROUP BY country
+ORDER BY revenue DESC
+LIMIT 10
+"""
+
+    if "monthly" in normalized and any(word in normalized for word in ["sales", "revenue"]):
+        return """
+SELECT
+    DATE_TRUNC('month', invoice_date) AS month,
+    ROUND(SUM(line_revenue), 2) AS revenue
+FROM online_retail_sales_lines
+WHERE NOT is_return
+GROUP BY month
+ORDER BY month
+"""
+
+    if "product" in normalized and "revenue" in normalized:
+        return """
+SELECT
+    description,
+    ROUND(SUM(line_revenue), 2) AS revenue
+FROM online_retail_sales_lines
+WHERE NOT is_return
+GROUP BY description
+ORDER BY revenue DESC
+LIMIT 20
+"""
+
+    if "customer" in normalized and "revenue" in normalized:
+        return """
+SELECT
+    customer_id,
+    country,
+    ROUND(gross_revenue, 2) AS gross_revenue,
+    order_count
+FROM online_retail_customers
+ORDER BY gross_revenue DESC
+LIMIT 20
+"""
+
+    return None
+
+
 @app.post("/upload")
-async def upload_csv(file: UploadFile):
+async def upload_file(file: UploadFile):
     try:
-        return upload_and_save_csv(file.file, file.filename)
+        return upload_and_save_file(file.file, file.filename)
     except Exception as e:
-        logger.exception("CSV upload failed")
+        logger.exception("File upload failed")
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -76,8 +140,13 @@ async def ask(question: str):
                 detail="Upload at least one CSV before asking a question.",
             )
 
-        # prompt for LLM to generate SQL based on question and current database schema
-        prompt = f"""
+        sql_query = predefined_sql_for_question(question)
+
+        if sql_query:
+            logger.info("Using predefined SQL for question: %s", question)
+        else:
+            # prompt for LLM to generate SQL based on question and current database schema
+            prompt = f"""
 You are a senior data engineer.
 
 IMPORTANT RULES:
@@ -97,10 +166,10 @@ Question:
 {question}
 """
 
-        raw_sql = ask_llm(prompt)
+            raw_sql = ask_llm(prompt)
 
-        logger.info("Raw LLM output: %s", raw_sql)
-        sql_query = extract_sql(raw_sql)
+            logger.info("Raw LLM output: %s", raw_sql)
+            sql_query = extract_sql(raw_sql)
 
         logger.info("Clean SQL: %s", sql_query)
 
@@ -108,12 +177,12 @@ Question:
         if not sql_query.lower().strip().startswith("select"):
             raise ValueError(f"Invalid SQL generated: {sql_query}")
         result_df = run_query(sql_query)
-        
+
         return {
             "question": question,
             "sql": sql_query,
             "rows": len(result_df),
-            "data": result_df.to_dict(orient="records"),
+            "data": json.loads(result_df.to_json(orient="records", date_format="iso")),
         }
 
     except HTTPException:
