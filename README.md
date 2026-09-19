@@ -54,16 +54,15 @@ Install dependencies from the repository:
 pip install -r requirements.txt
 ```
 
-An LLM provider must be available for open-ended questions. Docker Compose defaults to Ollama and pulls `llama3.1` automatically. For local runs, install Ollama and pull the model:
+An LLM provider must be available for open-ended questions. Docker Compose defaults to Ollama and pulls `qwen2.5-coder:7b` automatically. For local runs, install Ollama and pull the model:
 
 ```bash
-ollama pull llama3.1
+ollama pull qwen2.5-coder:7b
 ```
 
 The backend supports these LLM provider values:
 
 - `ollama`
-- `groq`
 - `openai`
 - `openai_compatible`
 
@@ -82,7 +81,7 @@ Default Ollama configuration:
 ```env
 LLM_PROVIDER=ollama
 OLLAMA_BASE_URL=http://ollama:11434
-OLLAMA_MODEL=llama3.1
+OLLAMA_MODEL=qwen2.5-coder:7b
 ```
 
 For a local non-Docker backend, use `localhost` instead of the Docker service name:
@@ -90,7 +89,7 @@ For a local non-Docker backend, use `localhost` instead of the Docker service na
 ```powershell
 $env:LLM_PROVIDER="ollama"
 $env:OLLAMA_BASE_URL="http://localhost:11434"
-$env:OLLAMA_MODEL="llama3.1"
+$env:OLLAMA_MODEL="qwen2.5-coder:7b"
 ```
 
 ## Running with Docker Compose
@@ -136,7 +135,7 @@ For a local Windows PowerShell run with the included virtual environment:
 .\env\Scripts\Activate.ps1
 $env:LLM_PROVIDER="ollama"
 $env:OLLAMA_BASE_URL="http://localhost:11434"
-$env:OLLAMA_MODEL="llama3.1"
+$env:OLLAMA_MODEL="qwen2.5-coder:7b"
 uvicorn app.main:app --reload
 ```
 

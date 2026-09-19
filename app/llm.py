@@ -11,7 +11,7 @@ LLM_TIMEOUT_SECONDS = int(
 )
 
 OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434").rstrip("/")
-OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "llama3.1")
+OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "qwen2.5-coder:7b")
 
 LLM_MODEL = os.getenv("LLM_MODEL")
 LLM_API_KEY = os.getenv("LLM_API_KEY")
@@ -56,11 +56,7 @@ def ask_ollama(prompt: str) -> str:
 
 
 def openai_compatible_settings() -> tuple[str, str, str]:
-    if LLM_PROVIDER == "groq":
-        base_url = OPENAI_COMPATIBLE_BASE_URL or "https://api.groq.com/openai/v1"
-        api_key = LLM_API_KEY or os.getenv("GROQ_API_KEY", "")
-        model = LLM_MODEL or "llama-3.3-70b-versatile"
-    elif LLM_PROVIDER == "openai":
+    if LLM_PROVIDER == "openai":
         base_url = OPENAI_COMPATIBLE_BASE_URL or "https://api.openai.com/v1"
         api_key = LLM_API_KEY or os.getenv("OPENAI_API_KEY", "")
         model = LLM_MODEL or os.getenv("OPENAI_MODEL", "")
@@ -121,9 +117,9 @@ def ask_llm(prompt: str) -> str:
     if LLM_PROVIDER == "ollama":
         return ask_ollama(prompt)
 
-    if LLM_PROVIDER in {"openai", "groq", "openai_compatible"}:
+    if LLM_PROVIDER in {"openai", "openai_compatible"}:
         return ask_openai_compatible(prompt)
 
     raise LLMError(
-        "Unsupported LLM_PROVIDER. Use ollama, openai, groq, or openai_compatible."
+        "Unsupported LLM_PROVIDER. Use ollama, openai, or openai_compatible."
     )

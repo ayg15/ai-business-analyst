@@ -48,7 +48,7 @@ Local backend on Windows PowerShell:
 .\env\Scripts\Activate.ps1
 $env:LLM_PROVIDER="ollama"
 $env:OLLAMA_BASE_URL="http://localhost:11434"
-$env:OLLAMA_MODEL="llama3.1"
+$env:OLLAMA_MODEL="qwen2.5-coder:7b"
 uvicorn app.main:app --reload
 ```
 
@@ -85,12 +85,12 @@ Quick syntax check:
 
 ## LLM and Query Behavior
 
-- `LLM_PROVIDER` controls the backend. Supported values are `ollama`, `groq`, `openai`, and `openai_compatible`.
+- `LLM_PROVIDER` controls the backend. Supported values are `ollama`,  `openai`, and `openai_compatible`.
 - The default `.env` uses `LLM_PROVIDER=ollama`.
 - Docker Compose uses `OLLAMA_BASE_URL=http://ollama:11434`; local non-Docker runs use `http://localhost:11434`.
 - Prefer changing `.env` for Docker provider settings instead of hard-coding values in Python.
 - Ollama is configured through `OLLAMA_BASE_URL` and `OLLAMA_MODEL`.
-- Hosted/OpenAI-compatible providers use `LLM_API_KEY`, provider-specific keys such as `GROQ_API_KEY` or `OPENAI_API_KEY`, `LLM_MODEL`, and optionally `OPENAI_COMPATIBLE_BASE_URL`.
+- Hosted/OpenAI-compatible providers use `LLM_API_KEY` or `OPENAI_API_KEY`, `LLM_MODEL`, and optionally `OPENAI_COMPATIBLE_BASE_URL`.
 - `LLM_TIMEOUT_SECONDS` controls the model request timeout.
 - Docker Compose reads the provider settings from `.env`.
 - Some common Online Retail questions use predefined SQL so the app can respond without waiting for Ollama.
