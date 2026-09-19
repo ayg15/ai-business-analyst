@@ -30,13 +30,14 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+      target: backend
     image: ai-business-analyst-backend
     container_name: ai-business-analyst-backend
     env_file:
       - .env
     environment:
       DATABASE_PATH: ${DATABASE_PATH:-/app/runtime/business_analyst.duckdb}
-      ONLINE_RETAIL_PATH: ${ONLINE_RETAIL_PATH:-/app/data/online_retail/Online Retail.xlsx}
+      ONLINE_RETAIL_PATH: ${ONLINE_RETAIL_PATH:-/app/data/Online Retail.xlsx}
       LLM_PROVIDER: ${LLM_PROVIDER:-ollama}
       LLM_TIMEOUT_SECONDS: ${LLM_TIMEOUT_SECONDS:-300}
       LLM_MODEL: ${LLM_MODEL:-}
@@ -65,7 +66,8 @@ services:
   frontend:
     build:
       context: .
-      dockerfile: Dockerfile.frontend
+      dockerfile: Dockerfile
+      target: frontend
     image: ai-business-analyst-frontend
     container_name: ai-business-analyst-frontend
     environment:

@@ -11,7 +11,7 @@ logger = logging.getLogger(__name__)
 
 DATABASE_PATH = os.getenv("DATABASE_PATH", "data/business_analyst.duckdb")
 ONLINE_RETAIL_PATH = os.getenv(
-    "ONLINE_RETAIL_PATH", "data/online_retail/Online Retail.xlsx"
+    "ONLINE_RETAIL_PATH", "data/Online Retail.xlsx"
 )
 Path(DATABASE_PATH).parent.mkdir(parents=True, exist_ok=True)
 

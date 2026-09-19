@@ -12,7 +12,7 @@ This repository contains an AI-powered business analytics assistant that:
 ## Architecture
 
 - `app/database.py`
-  - loads `data/online_retail/Online Retail.xlsx` at startup when available
+  - loads `data/Online Retail.xlsx` at startup when available
   - creates Online Retail analysis views for sales lines, orders, and customers
   - registers each uploaded CSV or Excel worksheet as a SQL table
   - lists tables, and describes table schemas
@@ -21,21 +21,24 @@ This repository contains an AI-powered business analytics assistant that:
   - sends prompts to a local LLM endpoint
   - expects the LLM response to contain a SQL query
 
-- `app/main.py`
+- `app/api.py`
   - exposes a FastAPI backend with endpoints for uploading files, listing tables, and asking business questions
   - uses the LLM to generate SQL from natural language, validates it, executes it against DuckDB, and returns the result
 
-- `frontend/streamlit_app.py`
+- `app/ui.py`
   - provides a Streamlit UI to upload CSV or Excel files
   - sends questions to the FastAPI backend
   - displays the generated SQL and query results
+
+- `Dockerfile`
+  - provides shared dependencies and separate `backend` and `frontend` build targets
 
 ## Dataset
 
 The default dataset is the UCI Online Retail workbook:
 
 ```bash
-data/online_retail/Online Retail.xlsx
+data/Online Retail.xlsx
 ```
 
 On startup, the backend loads the workbook into the `online_retail` table when it is available. It also creates these analysis views:
@@ -111,7 +114,7 @@ Docker Compose starts:
 - FastAPI on `http://localhost:8000`
 - Streamlit on `http://localhost:8501`
 
-The backend loads the Online Retail workbook from the image at `/app/data/online_retail/Online Retail.xlsx` and stores the DuckDB database in the `backend-data` volume at `/app/runtime`.
+The backend loads the Online Retail workbook from the image at `/app/data/Online Retail.xlsx` and stores the DuckDB database in the `backend-data` volume at `/app/runtime`.
 
 To use a hosted provider with Docker Compose instead, change `.env`, for example:
 
@@ -126,7 +129,7 @@ LLM_MODEL=gpt-4.1-mini
 Start the FastAPI server from the repository root:
 
 ```bash
-uvicorn app.main:app --reload
+uvicorn app.api:app --reload
 ```
 
 For a local Windows PowerShell run with the included virtual environment:
@@ -136,7 +139,7 @@ For a local Windows PowerShell run with the included virtual environment:
 $env:LLM_PROVIDER="ollama"
 $env:OLLAMA_BASE_URL="http://localhost:11434"
 $env:OLLAMA_MODEL="qwen2.5-coder:7b"
-uvicorn app.main:app --reload
+uvicorn app.api:app --reload
 ```
 
 The backend exposes:
@@ -151,14 +154,14 @@ For local runs, Ollama must be running. Docker Compose starts it automatically.
 Launch the frontend app:
 
 ```bash
-streamlit run frontend/streamlit_app.py
+streamlit run app/ui.py
 ```
 
 For a local Windows PowerShell run:
 
 ```powershell
 .\env\Scripts\Activate.ps1
-streamlit run frontend\streamlit_app.py
+streamlit run app\ui.py
 ```
 
 The frontend connects to the backend and will:
