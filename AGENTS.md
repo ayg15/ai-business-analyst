@@ -24,7 +24,7 @@ The backend loads the Online Retail workbook at startup when available and creat
 - `app/llm.py` calls the configured LLM provider.
 - `frontend/streamlit_app.py` provides the user interface.
 - `docker-compose.yml` runs Ollama, the backend, and the frontend together.
-- `.env` stores Docker Compose runtime configuration and provider settings.
+- `.env.example` provides shareable defaults; the ignored local `.env` stores active Docker Compose settings and secrets.
 - `README.md` contains user-facing setup and run instructions.
 - `requirements.txt` contains Python dependencies.
 
@@ -94,6 +94,7 @@ Quick syntax check:
 - `LLM_TIMEOUT_SECONDS` controls the model request timeout.
 - Docker Compose reads the provider settings from `.env`.
 - Some common Online Retail questions use predefined SQL so the app can respond without waiting for Ollama.
+- Open-ended prompts include Online Retail business definitions and retry failed generated SQL once.
 - Generated SQL is only lightly validated today. If improving safety, enforce single-statement read-only `SELECT` behavior before execution.
 
 ## Common Verification

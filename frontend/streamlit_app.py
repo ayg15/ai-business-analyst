@@ -15,7 +15,7 @@ if "uploaded_file_keys" not in st.session_state:
     st.session_state.uploaded_file_keys = set()
 
 uploaded_files = st.file_uploader(
-    "Upload CSV or Excel files", type=["csv", "xlsx", "xls"], accept_multiple_files=True
+    "Upload CSV or Excel files", type=["csv", "xlsx"], accept_multiple_files=True
 )
 
 
@@ -29,10 +29,16 @@ if uploaded_files:
         if file_key in st.session_state.uploaded_file_keys:
             continue
 
+        content_type = (
+            "text/csv"
+            if uploaded_file.name.lower().endswith(".csv")
+            else "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        )
+
         try:
             response = requests.post(
                 f"{BACKEND_URL}/upload",
-                files={"file": (uploaded_file.name, file_bytes, "text/csv")},
+                files={"file": (uploaded_file.name, file_bytes, content_type)},
                 timeout=60,
             )
             response.raise_for_status()

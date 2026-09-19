@@ -55,47 +55,68 @@ def extract_sql(text: str) -> str:
 
 def predefined_sql_for_question(question: str) -> str | None:
     normalized = re.sub(r"\s+", " ", question.lower()).strip()
+    asks_for_ranking = any(
+        word in normalized for word in ["most", "highest", "top", "generated"]
+    )
+    asks_for_time_by_month = "monthly" in normalized or "month" in normalized
+    asks_for_sales = "sales" in normalized or "revenue" in normalized
+
+    if asks_for_time_by_month and "countr" in normalized and asks_for_sales:
+        return """
+SELECT
+    DATE_TRUNC('month', invoice_date) AS month,
+    country,
+    ROUND(SUM(line_revenue), 2) AS revenue
+FROM online_retail_sales_lines
+WHERE NOT is_return AND quantity > 0 AND unit_price > 0
+GROUP BY month, country
+ORDER BY month, revenue DESC
+"""
 
     if (
         "countr" in normalized
-        and "revenue" in normalized
-        and any(word in normalized for word in ["most", "highest", "top", "generated"])
+        and asks_for_sales
+        and asks_for_ranking
     ):
         return """
 SELECT
     country,
     ROUND(SUM(line_revenue), 2) AS revenue
 FROM online_retail_sales_lines
-WHERE NOT is_return
+WHERE NOT is_return AND quantity > 0 AND unit_price > 0
 GROUP BY country
 ORDER BY revenue DESC
 LIMIT 10
 """
 
-    if "monthly" in normalized and any(word in normalized for word in ["sales", "revenue"]):
+    if asks_for_time_by_month and asks_for_sales:
         return """
 SELECT
     DATE_TRUNC('month', invoice_date) AS month,
     ROUND(SUM(line_revenue), 2) AS revenue
 FROM online_retail_sales_lines
-WHERE NOT is_return
+WHERE NOT is_return AND quantity > 0 AND unit_price > 0
 GROUP BY month
 ORDER BY month
 """
 
-    if "product" in normalized and "revenue" in normalized:
+    if "product" in normalized and "revenue" in normalized and asks_for_ranking:
         return """
 SELECT
     description,
     ROUND(SUM(line_revenue), 2) AS revenue
 FROM online_retail_sales_lines
-WHERE NOT is_return
+WHERE
+    NOT is_return
+    AND quantity > 0
+    AND unit_price > 0
+    AND description IS NOT NULL
 GROUP BY description
 ORDER BY revenue DESC
 LIMIT 20
 """
 
-    if "customer" in normalized and "revenue" in normalized:
+    if "customer" in normalized and "revenue" in normalized and asks_for_ranking:
         return """
 SELECT
     customer_id,
@@ -107,13 +128,116 @@ ORDER BY gross_revenue DESC
 LIMIT 20
 """
 
+    if (
+        "return" in normalized
+        and "order" in normalized
+        and ("how many" in normalized or "count" in normalized)
+    ):
+        return """
+SELECT COUNT(*) AS returned_order_count
+FROM online_retail_orders
+WHERE has_return
+"""
+
     return None
+
+
+def build_sql_prompt(
+    question: str,
+    schema_info: str,
+    previous_sql: str | None = None,
+    query_error: str | None = None,
+) -> str:
+    correction = ""
+    if query_error is not None:
+        correction = f"""
+
+The previous SQL failed.
+Previous SQL:
+{previous_sql or "<no valid SQL was produced>"}
+
+DuckDB error:
+{query_error}
+
+Correct the query and return only the corrected SQL.
+"""
+
+    return f"""
+You are a senior analytics engineer generating one DuckDB query.
+
+OUTPUT RULES:
+- Output only SQL, with no markdown or explanation.
+- Return exactly one read-only SELECT statement.
+- Use only tables and columns listed in the schema.
+- Do not mix the raw online_retail table with its derived views in one query.
+- Add LIMIT 200 to non-aggregate detail queries.
+
+ONLINE RETAIL BUSINESS RULES:
+- Prefer online_retail_sales_lines for sales, product, country, and return analysis.
+- A completed sale has is_return = FALSE, quantity > 0, and unit_price > 0.
+- Sales revenue is SUM(line_revenue) over completed sales unless the question explicitly asks for net revenue.
+- Net revenue includes returns and is SUM(line_revenue).
+- Return value is reported as a positive amount using ABS(line_revenue) where is_return = TRUE.
+- Prefer online_retail_orders for order counts, order values, and basket analysis.
+- Prefer online_retail_customers for customer-level summaries.
+- Never sum a customer or order summary view after joining it to sales lines because that duplicates values.
+- Use DATE_TRUNC for monthly, quarterly, or yearly analysis.
+
+Schema:
+{schema_info}
+
+Question:
+{question}
+{correction}
+"""
+
+
+def validate_generated_sql(sql_query: str) -> None:
+    if not sql_query.lower().strip().startswith("select"):
+        raise ValueError(f"Invalid SQL generated: {sql_query}")
+
+
+def answer_question(question: str, schema_info: str):
+    predefined_sql = predefined_sql_for_question(question)
+    if predefined_sql:
+        logger.info("Using predefined SQL for question: %s", question)
+        return predefined_sql.strip(), run_query(predefined_sql)
+
+    previous_sql = None
+    query_error = None
+
+    for attempt in range(2):
+        prompt = build_sql_prompt(
+            question,
+            schema_info,
+            previous_sql=previous_sql,
+            query_error=query_error,
+        )
+        raw_sql = ask_llm(prompt)
+        logger.info("Raw LLM output (attempt %s): %s", attempt + 1, raw_sql)
+        sql_query = extract_sql(raw_sql)
+
+        try:
+            validate_generated_sql(sql_query)
+            return sql_query, run_query(sql_query)
+        except Exception as exc:
+            if attempt == 1:
+                raise
+            previous_sql = sql_query
+            query_error = str(exc)
+            logger.warning("Generated SQL failed; requesting one correction: %s", exc)
+
+    raise RuntimeError("SQL generation failed after retry")
 
 
 @app.post("/upload")
 async def upload_file(file: UploadFile):
     try:
+        if not file.filename:
+            raise ValueError("Uploaded file must have a filename.")
         return upload_and_save_file(file.file, file.filename)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
     except Exception as e:
         logger.exception("File upload failed")
         raise HTTPException(status_code=500, detail=str(e))
@@ -140,43 +264,8 @@ async def ask(question: str):
                 detail="Upload at least one CSV before asking a question.",
             )
 
-        sql_query = predefined_sql_for_question(question)
-
-        if sql_query:
-            logger.info("Using predefined SQL for question: %s", question)
-        else:
-            # prompt for LLM to generate SQL based on question and current database schema
-            prompt = f"""
-You are a senior data engineer.
-
-IMPORTANT RULES:
-- Output ONLY SQL
-- No explanations
-- No markdown
-- Generate DuckDB SQL
-- Do not use MySQL backticks
-- Use double quotes for identifiers only when needed
-- Must start with SELECT
-- Use only these tables
-
-Schema:
-{schema_info}
-
-Question:
-{question}
-"""
-
-            raw_sql = ask_llm(prompt)
-
-            logger.info("Raw LLM output: %s", raw_sql)
-            sql_query = extract_sql(raw_sql)
-
+        sql_query, result_df = answer_question(question, schema_info)
         logger.info("Clean SQL: %s", sql_query)
-
-        # Basic validation to ensure we have a SELECT query before running it
-        if not sql_query.lower().strip().startswith("select"):
-            raise ValueError(f"Invalid SQL generated: {sql_query}")
-        result_df = run_query(sql_query)
 
         return {
             "question": question,

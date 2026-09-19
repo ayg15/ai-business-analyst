@@ -67,9 +67,15 @@ The backend supports these LLM provider values:
 - `openai`
 - `openai_compatible`
 
-Use `LLM_PROVIDER` to choose the provider. Ollama is the default in `.env`. Optional hosted providers require an API key and model.
+Use `LLM_PROVIDER` to choose the provider. Ollama is the default. Optional hosted providers require an API key and model.
 
-The repository includes a `.env` file with non-secret defaults for Docker Compose.
+The repository includes `.env.example` with non-secret defaults. Create your local `.env` before changing provider settings or adding API keys:
+
+```powershell
+Copy-Item .env.example .env
+```
+
+The local `.env` file is ignored by Git.
 
 Default Ollama configuration:
 
@@ -189,3 +195,10 @@ Example questions for the Online Retail dataset:
 - DuckDB data is persisted at `DATABASE_PATH`.
 - Uploaded files replace tables with the same sanitized file or worksheet name.
 - A few common Online Retail questions use predefined SQL so they return quickly without waiting for Ollama.
+- Generated SQL is retried once with the DuckDB error when the first query fails.
+
+Run the focused query-generation tests with:
+
+```powershell
+.\env\Scripts\python.exe -m unittest discover -s tests -v
+```

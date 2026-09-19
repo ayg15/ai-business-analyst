@@ -118,8 +118,20 @@ def create_online_retail_views() -> None:
             mode(country) AS country,
             MIN(invoice_date) AS first_order_date,
             MAX(invoice_date) AS last_order_date,
-            COUNT(DISTINCT invoice_no) AS order_count,
-            SUM(line_revenue) AS gross_revenue
+            COUNT(DISTINCT invoice_no) FILTER (
+                WHERE NOT is_return AND quantity > 0 AND unit_price > 0
+            ) AS order_count,
+            SUM(
+                CASE
+                    WHEN NOT is_return AND quantity > 0 AND unit_price > 0
+                    THEN line_revenue
+                    ELSE 0
+                END
+            ) AS gross_revenue,
+            SUM(
+                CASE WHEN is_return THEN ABS(line_revenue) ELSE 0 END
+            ) AS return_value,
+            SUM(line_revenue) AS net_revenue
         FROM online_retail_sales_lines
         WHERE customer_id IS NOT NULL
         GROUP BY customer_id
@@ -158,10 +170,10 @@ def upload_and_save_file(file: BinaryIO, filename: str) -> dict:
 
     if suffix == ".csv":
         saved_tables = save_csv(file, filename)
-    elif suffix in {".xlsx", ".xls"}:
+    elif suffix == ".xlsx":
         saved_tables = save_excel(file, filename)
     else:
-        raise ValueError("Unsupported file type. Upload a CSV or Excel workbook.")
+        raise ValueError("Unsupported file type. Upload a CSV or XLSX workbook.")
 
     return {
         "message": f"Loaded {len(saved_tables)} table(s) from {filename}",
