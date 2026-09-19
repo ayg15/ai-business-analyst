@@ -54,7 +54,7 @@ Install dependencies from the repository:
 pip install -r requirements.txt
 ```
 
-An LLM provider must be available for open-ended questions. Docker Compose defaults to Ollama and pulls `llama3.1` automatically. For local Ollama runs, start Ollama separately and pull the model:
+An LLM provider must be available for open-ended questions. Docker Compose defaults to Ollama and pulls `llama3.1` automatically. For local runs, install Ollama and pull the model:
 
 ```bash
 ollama pull llama3.1
@@ -67,25 +67,24 @@ The backend supports these LLM provider values:
 - `openai`
 - `openai_compatible`
 
-Use `LLM_PROVIDER` to choose the provider. Ollama is the default. For hosted providers, set an API key and model through environment variables.
+Use `LLM_PROVIDER` to choose the provider. Ollama is the default in `.env`. Optional hosted providers require an API key and model.
 
-The repository includes a `.env` file with safe defaults for Docker Compose. Edit that file to switch providers or set API keys.
+The repository includes a `.env` file with non-secret defaults for Docker Compose.
 
-Example Groq configuration:
+Default Ollama configuration:
 
-```powershell
-$env:LLM_PROVIDER="groq"
-$env:GROQ_API_KEY="your_api_key"
-$env:LLM_MODEL="llama-3.3-70b-versatile"
+```env
+LLM_PROVIDER=ollama
+OLLAMA_BASE_URL=http://ollama:11434
+OLLAMA_MODEL=llama3.1
 ```
 
-Example OpenAI-compatible configuration:
+For a local non-Docker backend, use `localhost` instead of the Docker service name:
 
 ```powershell
-$env:LLM_PROVIDER="openai_compatible"
-$env:OPENAI_COMPATIBLE_BASE_URL="https://api.example.com/v1"
-$env:LLM_API_KEY="your_api_key"
-$env:LLM_MODEL="provider-model-name"
+$env:LLM_PROVIDER="ollama"
+$env:OLLAMA_BASE_URL="http://localhost:11434"
+$env:OLLAMA_MODEL="llama3.1"
 ```
 
 ## Running with Docker Compose
@@ -109,12 +108,12 @@ Docker Compose starts:
 
 The backend loads the Online Retail workbook from the image at `/app/data/online_retail/Online Retail.xlsx` and stores the DuckDB database in the `backend-data` volume at `/app/runtime`.
 
-To use a hosted provider with Docker Compose, change `.env`, for example:
+To use a hosted provider with Docker Compose instead, change `.env`, for example:
 
 ```env
-LLM_PROVIDER=groq
-GROQ_API_KEY=your_api_key
-LLM_MODEL=llama-3.3-70b-versatile
+LLM_PROVIDER=openai
+OPENAI_API_KEY=your_api_key
+LLM_MODEL=gpt-4.1-mini
 ```
 
 ## Running the Backend
@@ -140,7 +139,7 @@ The backend exposes:
 - `GET /tables` - list registered tables and views
 - `GET /ask?question=<text>` - ask a business question
 
-The LLM service must also be running locally.
+For local runs, Ollama must be running. Docker Compose starts it automatically.
 
 ## Running the Streamlit Frontend
 

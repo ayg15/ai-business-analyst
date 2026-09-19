@@ -23,7 +23,7 @@ The backend loads the Online Retail workbook at startup when available and creat
 - `app/main.py` defines FastAPI endpoints and question handling.
 - `app/llm.py` calls the configured LLM provider.
 - `frontend/streamlit_app.py` provides the user interface.
-- `docker-compose.yml` runs Ollama, backend, and frontend together.
+- `docker-compose.yml` runs Ollama, the backend, and the frontend together.
 - `.env` stores Docker Compose runtime configuration and provider settings.
 - `README.md` contains user-facing setup and run instructions.
 - `requirements.txt` contains Python dependencies.
@@ -86,11 +86,13 @@ Quick syntax check:
 ## LLM and Query Behavior
 
 - `LLM_PROVIDER` controls the backend. Supported values are `ollama`, `groq`, `openai`, and `openai_compatible`.
+- The default `.env` uses `LLM_PROVIDER=ollama`.
+- Docker Compose uses `OLLAMA_BASE_URL=http://ollama:11434`; local non-Docker runs use `http://localhost:11434`.
 - Prefer changing `.env` for Docker provider settings instead of hard-coding values in Python.
 - Ollama is configured through `OLLAMA_BASE_URL` and `OLLAMA_MODEL`.
 - Hosted/OpenAI-compatible providers use `LLM_API_KEY`, provider-specific keys such as `GROQ_API_KEY` or `OPENAI_API_KEY`, `LLM_MODEL`, and optionally `OPENAI_COMPATIBLE_BASE_URL`.
 - `LLM_TIMEOUT_SECONDS` controls the model request timeout.
-- Docker Compose defaults to `LLM_PROVIDER=ollama` and uses `http://ollama:11434`; local Ollama runs usually use `http://localhost:11434`.
+- Docker Compose reads the provider settings from `.env`.
 - Some common Online Retail questions use predefined SQL so the app can respond without waiting for Ollama.
 - Generated SQL is only lightly validated today. If improving safety, enforce single-statement read-only `SELECT` behavior before execution.
 
