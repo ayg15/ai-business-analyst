@@ -6,10 +6,10 @@ Guidance for coding agents working in this repository.
 
 This is an AI business analytics assistant with:
 - FastAPI backend in `app/`
-- Streamlit frontend in `frontend/`
+- Streamlit frontend in `app/ui.py`
 - DuckDB persistence
 - Provider-configurable natural-language-to-SQL generation
-- A bundled Online Retail workbook at `data/online_retail/Online Retail.xlsx`
+- A bundled Online Retail workbook at `data/Online Retail.xlsx`
 
 The backend loads the Online Retail workbook at startup when available and creates these query surfaces:
 - `online_retail`
@@ -20,9 +20,10 @@ The backend loads the Online Retail workbook at startup when available and creat
 ## Important Files
 
 - `app/database.py` handles file ingestion, DuckDB access, and Online Retail views.
-- `app/main.py` defines FastAPI endpoints and question handling.
+- `app/api.py` defines FastAPI endpoints and question handling.
 - `app/llm.py` calls the configured LLM provider.
-- `frontend/streamlit_app.py` provides the user interface.
+- `app/ui.py` provides the user interface.
+- `Dockerfile` defines shared `backend` and `frontend` build targets.
 - `docker-compose.yml` runs Ollama, the backend, and the frontend together.
 - `.env.example` provides shareable defaults; the ignored local `.env` stores active Docker Compose settings and secrets.
 - `README.md` contains user-facing setup and run instructions.
@@ -49,27 +50,27 @@ Local backend on Windows PowerShell:
 $env:LLM_PROVIDER="ollama"
 $env:OLLAMA_BASE_URL="http://localhost:11434"
 $env:OLLAMA_MODEL="qwen2.5-coder:7b"
-uvicorn app.main:app --reload
+uvicorn app.api:app --reload
 ```
 
 Local frontend on Windows PowerShell:
 
 ```powershell
 .\env\Scripts\Activate.ps1
-streamlit run frontend\streamlit_app.py
+streamlit run app\ui.py
 ```
 
 Quick syntax check:
 
 ```powershell
-.\env\Scripts\python.exe -m py_compile app\database.py app\main.py app\llm.py frontend\streamlit_app.py
+.\env\Scripts\python.exe -m py_compile app\database.py app\api.py app\llm.py app\ui.py
 ```
 
 ## Data and Runtime Notes
 
 - Do not require users to upload `Online Retail.xlsx`; the backend should load it automatically.
 - Docker Compose reads runtime settings from `.env`.
-- In Docker, `ONLINE_RETAIL_PATH` points to `/app/data/online_retail/Online Retail.xlsx`.
+- In Docker, `ONLINE_RETAIL_PATH` points to `/app/data/Online Retail.xlsx`.
 - In Docker, `DATABASE_PATH` should point outside `/app/data`, currently `/app/runtime/business_analyst.duckdb`, so the runtime volume does not hide the bundled workbook.
 - Local DuckDB files such as `data/business_analyst.duckdb` are runtime artifacts and should not be committed.
 - The `data/` folder may be untracked while still required locally because it contains the workbook.
@@ -79,7 +80,7 @@ Quick syntax check:
 - Keep changes small and aligned with the existing simple FastAPI/Streamlit structure.
 - Prefer improving `app/database.py` helpers over duplicating DuckDB logic in routes.
 - Preserve CSV upload support when modifying Excel upload behavior.
-- Keep Online Retail fast-path SQL in `app/main.py` simple and read-only.
+- Keep Online Retail fast-path SQL in `app/api.py` simple and read-only.
 - Do not remove Docker support unless explicitly requested.
 - Avoid committing virtual environment contents, `__pycache__`, DuckDB files, or scratch files.
 
